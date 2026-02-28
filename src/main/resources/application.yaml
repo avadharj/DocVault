@@ -1,3 +1,25 @@
 spring:
-  application:
-    name: docvault
+  datasource:
+    url: jdbc:postgresql://localhost:5432/filemanager
+    username: postgres
+    password: yourpassword
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    # Base64-encoded 256-bit key — generate your own with:
+    # openssl rand -base64 32
+    secret: dGhpc0lzQVZlcnlMb25nU2VjcmV0S2V5Rm9ySldUU2lnbmluZzI1NkJpdHM=
+    expiration-ms: 86400000  # 24 hours
