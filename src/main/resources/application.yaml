@@ -23,3 +23,5 @@ app:
     # openssl rand -base64 32
     secret: dGhpc0lzQVZlcnlMb25nU2VjcmV0S2V5Rm9ySldUU2lnbmluZzI1NkJpdHM=
     expiration-ms: 86400000  # 24 hours
+  cors:
+    allowed-origins: http://localhost:3000
