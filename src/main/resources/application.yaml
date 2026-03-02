@@ -1,27 +1,28 @@
 spring:
+  profiles:
+    active: dev
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/filemanager
-    username: postgres
-    password: yourpassword
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/docvault}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:yourpassword}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 app:
   jwt:
-    # Base64-encoded 256-bit key — generate your own with:
-    # openssl rand -base64 32
-    secret: dGhpc0lzQVZlcnlMb25nU2VjcmV0S2V5Rm9ySldUU2lnbmluZzI1NkJpdHM=
-    expiration-ms: 86400000  # 24 hours
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION:86400000}
   cors:
-    allowed-origins: http://localhost:3000
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000}

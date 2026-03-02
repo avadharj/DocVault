@@ -1,0 +1,40 @@
+# Development profile — relaxed settings for local work
+# Activated by default via spring.profiles.active=dev in application.yml
+# Override by running with: --spring.profiles.active=prod
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/docvault
+    username: postgres
+    password: yourpassword
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Dev-friendly error responses — shows binding errors in 400 responses
+  mvc:
+    problemdetails:
+      enabled: true
+
+# Logging — more verbose in dev
+logging:
+  level:
+    com.docvault: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+app:
+  jwt:
+    # Dev-only placeholder key — NEVER use this in production
+    # Generate a real key with: openssl rand -base64 32
+    secret: dGhpcyBpcyBhIHZlcnkgc2VjcmV0IGtleSBmb3IgSldU
+    expiration-ms: 86400000  # 24 hours
+  cors:
+    allowed-origins: http://localhost:3000
+    
