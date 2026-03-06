@@ -4,7 +4,7 @@
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/docvault
+    url: jdbc:postgresql://localhost:5433/docvault
     username: postgres
     password: yourpassword
 

@@ -30,6 +30,7 @@
 		<java.version>25</java.version>
 	</properties>
 	<dependencies>
+		<!-- Spring Boot Starters -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -47,35 +48,18 @@
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 
+		<!-- Database -->
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+
+		<!-- Lombok -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-validation-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc-test</artifactId>
-			<scope>test</scope>
 		</dependency>
 
 		<!-- JWT Support (jjwt) -->
@@ -96,10 +80,37 @@
 			<version>0.11.5</version>
 			<scope>runtime</scope>
 		</dependency>
-			<dependency>
+
+		<!-- Testing -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<scope>test</scope>
+		</dependency>
+		<!--
+			Spring Boot 4.0 modularized test autoconfiguration.
+			AutoConfigureMockMvc moved to org.springframework.boot.webmvc.test.autoconfigure.
+			This module provides MockMvc test support for Spring Boot 4.x.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Spring Boot 4.0 separated Jackson/JSON autoconfiguration into its own starter -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jackson</artifactId>
 		</dependency>
 	</dependencies>
 
@@ -132,69 +143,59 @@
 
 			<!-- JaCoCo Code Coverage Plugin -->
 			<plugin>
-			<groupId>org.jacoco</groupId>
-			<artifactId>jacoco-maven-plugin</artifactId>
-			<version>0.8.13</version>
-			<executions>
-				<!-- Prepares the JaCoCo agent before tests run -->
-				<execution>
-					<id>prepare-agent</id>
-					<goals>
-						<goal>prepare-agent</goal>
-					</goals>
-				</execution>
-
-				<!-- Generates the coverage report after tests complete -->
-				<execution>
-					<id>report</id>
-					<phase>test</phase>
-					<goals>
-						<goal>report</goal>
-					</goals>
-				</execution>
-
-				<!-- Enforces minimum coverage thresholds — fails the build if not met -->
-				<execution>
-					<id>check</id>
-					<goals>
-						<goal>check</goal>
-					</goals>
-					<configuration>
-						<rules>
-							<rule>
-								<element>BUNDLE</element>
-								<limits>
-									<limit>
-										<counter>LINE</counter>
-										<value>COVEREDRATIO</value>
-										<minimum>0.85</minimum>
-									</limit>
-									<limit>
-										<counter>BRANCH</counter>
-										<value>COVEREDRATIO</value>
-										<minimum>0.85</minimum>
-									</limit>
-								</limits>
-							</rule>
-						</rules>
-
-						<!-- Exclude classes that don't need coverage enforcement:
-							- Entities/DTOs/Enums are just data carriers (Lombok-generated code)
-							- Config classes are Spring wiring, not business logic
-							- Main application class is just the entry point -->
-						<excludes>
-							<exclude>com/docvault/config/**</exclude>
-							<exclude>com/docvault/entity/**</exclude>
-							<exclude>com/docvault/enums/**</exclude>
-							<exclude>com/docvault/dto/**</exclude>
-							<exclude>com/docvault/security/UserDetailsImpl.class</exclude>
-							<exclude>com/docvault/DocVaultApplication.class</exclude>
-						</excludes>
-					</configuration>
-				</execution>
-			</executions>
-		</plugin>
-	</plugins>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.13</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>check</id>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.85</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.85</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+							<excludes>
+								<exclude>com/docvault/config/**</exclude>
+								<exclude>com/docvault/entity/**</exclude>
+								<exclude>com/docvault/enums/**</exclude>
+								<exclude>com/docvault/dto/**</exclude>
+								<exclude>com/docvault/security/UserDetailsImpl.class</exclude>
+								<exclude>com/docvault/DocVaultApplication.class</exclude>
+							</excludes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
 	</build>
 
 </project>
