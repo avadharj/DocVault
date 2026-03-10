@@ -16,7 +16,6 @@ import java.util.Date;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtUtilsTest {
 
@@ -189,9 +188,9 @@ class JwtUtilsTest {
         }
 
         @Test
-        @DisplayName("Given a token signed with a different key, when validating, then throws SignatureException")
-        void givenTokenSignedWithDifferentKey_whenValidating_thenThrowsSignatureException() {
-            // Given — a valid 256-bit key that's different from the app's signing key
+        @DisplayName("Given a token signed with a different key, when validating, then returns false")
+        void givenTokenSignedWithDifferentKey_whenValidating_thenReturnsFalse() {
+            // Given
             String differentSecret = "c29tZXRoaW5nY29tcGxldGVseWRpZmZlcmVudGtleTE=";
             Key differentKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(differentSecret));
 
@@ -202,10 +201,11 @@ class JwtUtilsTest {
                     .signWith(differentKey, SignatureAlgorithm.HS256)
                     .compact();
 
-            // When / Then — extractUsername (called inside validateToken) throws
-            // because the signature doesn't match the app's signing key
-            assertThatThrownBy(() -> jwtUtils.validateToken(tamperedToken, userDetails))
-                    .isInstanceOf(io.jsonwebtoken.security.SignatureException.class);
+            // When
+            boolean isValid = jwtUtils.validateToken(tamperedToken, userDetails);
+
+            // Then
+            assertThat(isValid).isFalse();
         }
     }
 }
