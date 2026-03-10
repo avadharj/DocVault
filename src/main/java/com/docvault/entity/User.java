@@ -1,9 +1,6 @@
 package com.docvault.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -18,31 +15,27 @@ import java.util.Set;
                 @UniqueConstraint(columnNames = "username"),
                 @UniqueConstraint(columnNames = "email")
         })
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString(exclude = "password")
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
-    @NotBlank
-    @Size(min = 3, max = 50)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50)
     private String username;
 
-    @NotBlank
-    @Email
-    @Size(max = 100)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String email;
 
-    @NotBlank
-    @Size(min = 8, max = 120)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 120)
     private String password;
 
     @Builder.Default
@@ -56,6 +49,8 @@ public class User {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    // EAGER is intentional here — roles are needed on every authenticated request
+    // for Spring Security authority checks. Use LAZY as default for all other relationships.
     @Builder.Default
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(

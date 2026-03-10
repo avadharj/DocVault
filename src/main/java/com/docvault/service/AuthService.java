@@ -10,6 +10,8 @@ import com.docvault.repository.UserRepository;
 import com.docvault.security.JwtUtils;
 import com.docvault.security.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -25,6 +27,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
@@ -34,10 +38,12 @@ public class AuthService {
     @Transactional
     public MessageResponse signup(SignupRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
+            logger.warn("Signup failed: username '{}' is already taken", request.getUsername());
             throw new UserAlreadyExistsException("Username is already taken");
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
+            logger.warn("Signup failed: email '{}' is already in use", request.getEmail());
             throw new UserAlreadyExistsException("Email is already in use");
         }
 
@@ -47,12 +53,13 @@ public class AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .build();
 
-        Role defaultRole = roleRepository.findByName(resolveRole(request.getRole()))
+        Role defaultRole = roleRepository.findByName(ERole.ROLE_VIEWER)
                 .orElseThrow(() -> new RuntimeException("Default role not found in database"));
 
         user.getRoles().add(defaultRole);
         userRepository.save(user);
 
+        logger.info("User '{}' registered successfully with role VIEWER", request.getUsername());
         return MessageResponse.of("User registered successfully");
     }
 
@@ -71,6 +78,8 @@ public class AuthService {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toSet());
 
+        logger.info("User '{}' logged in successfully", userDetails.getUsername());
+
         return JwtResponse.of(
                 token,
                 userDetails.getId(),
@@ -85,27 +94,6 @@ public class AuthService {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Set<String> roles = user.getRoles().stream()
-                .map(role -> role.getName().name())
-                .collect(Collectors.toSet());
-
-        return UserProfileResponse.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .roles(roles)
-                .createdAt(user.getCreatedAt())
-                .build();
-    }
-
-    private ERole resolveRole(String role) {
-        if (role == null || role.isBlank()) {
-            return ERole.ROLE_VIEWER;
-        }
-        return switch (role.toUpperCase()) {
-            case "ADMIN" -> ERole.ROLE_ADMIN;
-            case "EDITOR" -> ERole.ROLE_EDITOR;
-            default -> ERole.ROLE_VIEWER;
-        };
+        return UserProfileResponse.fromEntity(user);
     }
 }

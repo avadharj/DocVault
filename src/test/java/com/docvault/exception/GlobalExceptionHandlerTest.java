@@ -76,6 +76,29 @@ class GlobalExceptionHandlerTest {
     }
 
     @Nested
+    @DisplayName("ResourceNotFoundException")
+    class HandleResourceNotFound {
+
+        @Test
+        @DisplayName("Given resource not found, when handled, then returns 404 with message")
+        void givenResourceNotFound_whenHandled_thenReturns404WithMessage() {
+            // Given
+            var ex = new ResourceNotFoundException("User not found with id: 999");
+
+            // When
+            ResponseEntity<ErrorResponse> response = handler.handleResourceNotFound(ex, request);
+
+            // Then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().getStatus()).isEqualTo(404);
+            assertThat(response.getBody().getError()).isEqualTo("Not Found");
+            assertThat(response.getBody().getMessage()).isEqualTo("User not found with id: 999");
+            assertThat(response.getBody().getPath()).isEqualTo("/api/test");
+        }
+    }
+
+    @Nested
     @DisplayName("AccessDeniedException")
     class HandleAccessDenied {
 

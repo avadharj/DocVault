@@ -4,6 +4,7 @@ import com.docvault.dto.UserProfileResponse;
 import com.docvault.entity.Role;
 import com.docvault.entity.User;
 import com.docvault.enums.ERole;
+import com.docvault.exception.ResourceNotFoundException;
 import com.docvault.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -121,14 +122,14 @@ class UserServiceTest {
         }
 
         @Test
-        @DisplayName("Given user does not exist, when getting user by id, then throws RuntimeException")
-        void givenUserDoesNotExist_whenGettingUserById_thenThrowsRuntimeException() {
+        @DisplayName("Given user does not exist, when getting user by id, then throws ResourceNotFoundException")
+        void givenUserDoesNotExist_whenGettingUserById_thenThrowsResourceNotFoundException() {
             // Given
             when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
             // When / Then
             assertThatThrownBy(() -> userService.getUserById(999L))
-                    .isInstanceOf(RuntimeException.class)
+                    .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessage("User not found with id: 999");
         }
     }

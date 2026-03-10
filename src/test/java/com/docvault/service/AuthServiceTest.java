@@ -86,8 +86,8 @@ class AuthServiceTest {
     class Signup {
 
         @Test
-        @DisplayName("Given valid request with no role, when signing up, then creates user with VIEWER role")
-        void givenValidRequestWithNoRole_whenSigningUp_thenCreatesUserWithViewerRole() {
+        @DisplayName("Given valid request, when signing up, then creates user with default VIEWER role")
+        void givenValidRequest_whenSigningUp_thenCreatesUserWithDefaultViewerRole() {
             // Given
             when(userRepository.existsByUsername("testuser")).thenReturn(false);
             when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
@@ -108,82 +108,6 @@ class AuthServiceTest {
             assertThat(savedUser.getEmail()).isEqualTo("test@example.com");
             assertThat(savedUser.getPassword()).isEqualTo("hashedpassword");
             assertThat(savedUser.getRoles()).containsExactly(viewerRole);
-        }
-
-        @Test
-        @DisplayName("Given valid request with ADMIN role, when signing up, then creates user with ADMIN role")
-        void givenValidRequestWithAdminRole_whenSigningUp_thenCreatesUserWithAdminRole() {
-            // Given
-            signupRequest.setRole("ADMIN");
-            when(userRepository.existsByUsername("testuser")).thenReturn(false);
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(passwordEncoder.encode("password123")).thenReturn("hashedpassword");
-            when(roleRepository.findByName(ERole.ROLE_ADMIN)).thenReturn(Optional.of(adminRole));
-
-            // When
-            MessageResponse response = authService.signup(signupRequest);
-
-            // Then
-            assertThat(response.getMessage()).isEqualTo("User registered successfully");
-
-            ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-            verify(userRepository).save(userCaptor.capture());
-            assertThat(userCaptor.getValue().getRoles()).containsExactly(adminRole);
-        }
-
-        @Test
-        @DisplayName("Given valid request with EDITOR role, when signing up, then creates user with EDITOR role")
-        void givenValidRequestWithEditorRole_whenSigningUp_thenCreatesUserWithEditorRole() {
-            // Given
-            signupRequest.setRole("EDITOR");
-            when(userRepository.existsByUsername("testuser")).thenReturn(false);
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(passwordEncoder.encode("password123")).thenReturn("hashedpassword");
-            when(roleRepository.findByName(ERole.ROLE_EDITOR)).thenReturn(Optional.of(editorRole));
-
-            // When
-            MessageResponse response = authService.signup(signupRequest);
-
-            // Then
-            ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-            verify(userRepository).save(userCaptor.capture());
-            assertThat(userCaptor.getValue().getRoles()).containsExactly(editorRole);
-        }
-
-        @Test
-        @DisplayName("Given valid request with unknown role, when signing up, then defaults to VIEWER role")
-        void givenValidRequestWithUnknownRole_whenSigningUp_thenDefaultsToViewerRole() {
-            // Given
-            signupRequest.setRole("SUPERUSER");
-            when(userRepository.existsByUsername("testuser")).thenReturn(false);
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(passwordEncoder.encode("password123")).thenReturn("hashedpassword");
-            when(roleRepository.findByName(ERole.ROLE_VIEWER)).thenReturn(Optional.of(viewerRole));
-
-            // When
-            MessageResponse response = authService.signup(signupRequest);
-
-            // Then
-            ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-            verify(userRepository).save(userCaptor.capture());
-            assertThat(userCaptor.getValue().getRoles()).containsExactly(viewerRole);
-        }
-
-        @Test
-        @DisplayName("Given valid request with blank role, when signing up, then defaults to VIEWER role")
-        void givenValidRequestWithBlankRole_whenSigningUp_thenDefaultsToViewerRole() {
-            // Given
-            signupRequest.setRole("   ");
-            when(userRepository.existsByUsername("testuser")).thenReturn(false);
-            when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-            when(passwordEncoder.encode("password123")).thenReturn("hashedpassword");
-            when(roleRepository.findByName(ERole.ROLE_VIEWER)).thenReturn(Optional.of(viewerRole));
-
-            // When
-            authService.signup(signupRequest);
-
-            // Then
-            verify(roleRepository).findByName(ERole.ROLE_VIEWER);
         }
 
         @Test
