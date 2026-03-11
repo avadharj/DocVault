@@ -1,0 +1,9 @@
+node_modules/
+dist/
+cdk.out/
+*.js
+*.d.ts
+!jest.config.js
+
+# CDK context — contains account/region info, don't commit
+cdk.context.json

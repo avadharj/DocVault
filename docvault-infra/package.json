@@ -1,0 +1,22 @@
+{
+  "name": "docvault-infra",
+  "version": "1.0.0",
+  "description": "AWS CDK infrastructure for DocVault - Phase 2: S3 file storage",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.178.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.0",
+    "ts-node": "^10.9.2",
+    "@types/node": "^22.0.0"
+  }
+}
