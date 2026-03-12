@@ -20,4 +20,10 @@ app:
     expiration-ms: 86400000
   cors:
     allowed-origins: http://localhost:3000
+  aws:
+    region: us-east-1
+    s3:
+      bucket-name: test-bucket
+      access-key: test-key
+      secret-key: test-secret
     
