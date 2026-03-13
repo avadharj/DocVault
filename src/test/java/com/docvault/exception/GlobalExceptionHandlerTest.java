@@ -9,6 +9,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import com.docvault.exception.FileValidationException;
+import com.docvault.exception.StorageException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -205,6 +208,91 @@ class GlobalExceptionHandlerTest {
                     .isEqualTo("An unexpected error occurred")
                     .doesNotContain("NullPointerException")
                     .doesNotContain("user.getName()");
+        }
+    }
+
+    @Nested
+    @DisplayName("FileValidationException")
+    class HandleFileValidation {
+ 
+        @Test
+        @DisplayName("Given invalid file type, when handled, then returns 400 with message")
+        void givenInvalidFileType_whenHandled_thenReturns400WithMessage() {
+            // Given
+            var ex = new FileValidationException("File type 'application/x-executable' is not allowed");
+ 
+            // When
+            ResponseEntity<ErrorResponse> response = handler.handleFileValidation(ex, request);
+ 
+            // Then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().getStatus()).isEqualTo(400);
+            assertThat(response.getBody().getError()).isEqualTo("Bad Request");
+            assertThat(response.getBody().getMessage())
+                    .isEqualTo("File type 'application/x-executable' is not allowed");
+            assertThat(response.getBody().getPath()).isEqualTo("/api/test");
+        }
+ 
+        @Test
+        @DisplayName("Given empty file, when handled, then returns 400 with message")
+        void givenEmptyFile_whenHandled_thenReturns400WithMessage() {
+            // Given
+            var ex = new FileValidationException("File is required and must not be empty");
+ 
+            // When
+            ResponseEntity<ErrorResponse> response = handler.handleFileValidation(ex, request);
+ 
+            // Then
+            assertThat(response.getBody().getMessage())
+                    .isEqualTo("File is required and must not be empty");
+        }
+    }
+ 
+    @Nested
+    @DisplayName("StorageException")
+    class HandleStorageException {
+ 
+        @Test
+        @DisplayName("Given S3 failure, when handled, then returns 500 without leaking details")
+        void givenS3Failure_whenHandled_thenReturns500WithoutLeakingDetails() {
+            // Given
+            var ex = new StorageException("S3 connection refused: bucket xyz at endpoint ...");
+ 
+            // When
+            ResponseEntity<ErrorResponse> response = handler.handleStorageException(ex, request);
+ 
+            // Then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().getStatus()).isEqualTo(500);
+            assertThat(response.getBody().getMessage())
+                    .isEqualTo("File storage operation failed")
+                    .doesNotContain("S3")
+                    .doesNotContain("connection refused");
+            assertThat(response.getBody().getPath()).isEqualTo("/api/test");
+        }
+    }
+ 
+    @Nested
+    @DisplayName("MaxUploadSizeExceededException")
+    class HandleMaxUploadSize {
+ 
+        @Test
+        @DisplayName("Given file exceeds Spring max size, when handled, then returns 400")
+        void givenFileExceedsSpringMaxSize_whenHandled_thenReturns400() {
+            // Given
+            var ex = new MaxUploadSizeExceededException(100 * 1024 * 1024);
+ 
+            // When
+            ResponseEntity<ErrorResponse> response = handler.handleMaxUploadSize(ex, request);
+ 
+            // Then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().getStatus()).isEqualTo(400);
+            assertThat(response.getBody().getMessage())
+                    .isEqualTo("File size exceeds maximum allowed size");
         }
     }
 }
