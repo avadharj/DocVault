@@ -77,7 +77,7 @@ class AuthIntegrationTest {
             mockMvc.perform(post("/api/auth/signup")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(jsonMapper.writeValueAsString(request)))
-                    .andExpect(status().isOk())
+                    .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.message").value("User registered successfully"));
 
             assertThat(userRepository.existsByUsername("testuser")).isTrue();

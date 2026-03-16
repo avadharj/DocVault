@@ -1,10 +1,12 @@
 package com.docvault.service;
 
+import com.docvault.dto.FileDownloadResponse;
 import com.docvault.dto.FileUploadResponse;
 import com.docvault.entity.FileMetadata;
 import com.docvault.entity.User;
 import com.docvault.enums.UploadStatus;
 import com.docvault.exception.FileValidationException;
+import com.docvault.exception.ResourceNotFoundException;
 import com.docvault.exception.StorageException;
 import com.docvault.repository.FileMetadataRepository;
 import com.docvault.repository.UserRepository;
@@ -18,11 +20,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +56,12 @@ class FileServiceTest {
 
     private User testUser;
     private UserDetailsImpl userDetails;
+
+    private final Answer<FileMetadata> saveAnswer = invocation -> {
+        FileMetadata fm = invocation.getArgument(0);
+        if (fm.getId() == null) fm.setId(UUID.randomUUID());
+        return fm;
+    };
 
     @BeforeEach
     void setUp() {
@@ -80,14 +91,8 @@ class FileServiceTest {
 
             when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
             when(s3StorageService.getBucketName()).thenReturn("test-bucket");
-            when(fileMetadataRepository.save(any(FileMetadata.class)))
-                    .thenAnswer(invocation -> {
-                        FileMetadata fm = invocation.getArgument(0);
-                        if (fm.getId() == null) {
-                            fm.setId(UUID.randomUUID());
-                        }
-                        return fm;
-                    });
+            when(fileMetadataRepository.save(any(FileMetadata.class))).thenAnswer(saveAnswer);
+            when(fileMetadataRepository.saveAndFlush(any(FileMetadata.class))).thenAnswer(saveAnswer);
 
             // When
             FileUploadResponse response = fileService.uploadFile(file, userDetails);
@@ -102,8 +107,9 @@ class FileServiceTest {
             // Verify S3 upload was called
             verify(s3StorageService).uploadFile(anyString(), any(), eq(1024L), eq("application/pdf"));
 
-            // Verify metadata was saved 3 times: PENDING → S3 upload → CLEAN
-            verify(fileMetadataRepository, times(3)).save(any(FileMetadata.class));
+            // Verify metadata saves: save(PENDING) + saveAndFlush(CLEAN)
+            verify(fileMetadataRepository).save(any(FileMetadata.class));
+            verify(fileMetadataRepository).saveAndFlush(any(FileMetadata.class));
         }
 
         @Test
@@ -115,21 +121,17 @@ class FileServiceTest {
 
             when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
             when(s3StorageService.getBucketName()).thenReturn("test-bucket");
-            when(fileMetadataRepository.save(any(FileMetadata.class)))
-                    .thenAnswer(invocation -> {
-                        FileMetadata fm = invocation.getArgument(0);
-                        if (fm.getId() == null) fm.setId(UUID.randomUUID());
-                        return fm;
-                    });
+            when(fileMetadataRepository.save(any(FileMetadata.class))).thenAnswer(saveAnswer);
+            when(fileMetadataRepository.saveAndFlush(any(FileMetadata.class))).thenAnswer(saveAnswer);
 
             // When
             fileService.uploadFile(file, userDetails);
 
             // Then — capture the metadata to inspect the S3 key
             ArgumentCaptor<FileMetadata> captor = ArgumentCaptor.forClass(FileMetadata.class);
-            verify(fileMetadataRepository, atLeastOnce()).save(captor.capture());
+            verify(fileMetadataRepository).save(captor.capture());
 
-            FileMetadata saved = captor.getAllValues().get(0);
+            FileMetadata saved = captor.getValue();
             assertThat(saved.getS3Key()).startsWith("uploads/1/");
             assertThat(saved.getS3Key()).endsWith("_test.png");
             assertThat(saved.getS3Bucket()).isEqualTo("test-bucket");
@@ -145,12 +147,8 @@ class FileServiceTest {
 
             when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
             when(s3StorageService.getBucketName()).thenReturn("test-bucket");
-            when(fileMetadataRepository.save(any(FileMetadata.class)))
-                    .thenAnswer(invocation -> {
-                        FileMetadata fm = invocation.getArgument(0);
-                        if (fm.getId() == null) fm.setId(UUID.randomUUID());
-                        return fm;
-                    });
+            when(fileMetadataRepository.save(any(FileMetadata.class))).thenAnswer(saveAnswer);
+
             doThrow(new StorageException("S3 is down"))
                     .when(s3StorageService).uploadFile(anyString(), any(), anyLong(), anyString());
 
@@ -158,11 +156,11 @@ class FileServiceTest {
             assertThatThrownBy(() -> fileService.uploadFile(file, userDetails))
                     .isInstanceOf(StorageException.class);
 
-            // Verify status was set to FAILED
+            // Verify status was set to FAILED: save(PENDING) + save(FAILED)
             ArgumentCaptor<FileMetadata> captor = ArgumentCaptor.forClass(FileMetadata.class);
-            verify(fileMetadataRepository, atLeast(2)).save(captor.capture());
+            verify(fileMetadataRepository, times(2)).save(captor.capture());
 
-            FileMetadata lastSave = captor.getAllValues().get(captor.getAllValues().size() - 1);
+            FileMetadata lastSave = captor.getAllValues().get(1);
             assertThat(lastSave.getUploadStatus()).isEqualTo(UploadStatus.FAILED);
         }
     }
@@ -295,6 +293,147 @@ class FileServiceTest {
             assertThat(key).endsWith("/abc123_report.pdf");
             // Should contain year and month segments
             assertThat(key.split("/")).hasSize(5);
+        }
+    }
+
+    @Nested
+    @DisplayName("Generate Download URL")
+    class GenerateDownloadUrl {
+
+        @Test
+        @DisplayName("Given valid file owned by user, when generating download URL, then returns pre-signed URL")
+        void givenValidFileOwnedByUser_whenGeneratingDownloadUrl_thenReturnsPresignedUrl() {
+            // Given
+            UUID fileId = UUID.randomUUID();
+            FileMetadata metadata = FileMetadata.builder()
+                    .id(fileId)
+                    .originalFilename("report.pdf")
+                    .storedFilename("uuid_report.pdf")
+                    .contentType("application/pdf")
+                    .fileSize(2048L)
+                    .s3Key("uploads/1/2026/03/uuid_report.pdf")
+                    .s3Bucket("test-bucket")
+                    .uploadStatus(UploadStatus.CLEAN)
+                    .owner(testUser)
+                    .build();
+
+            when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
+            when(fileMetadataRepository.findByIdAndOwner(fileId, testUser))
+                    .thenReturn(Optional.of(metadata));
+            when(s3StorageService.generatePresignedDownloadUrl(anyString(), any(Duration.class)))
+                    .thenReturn("https://s3.amazonaws.com/test-bucket/uploads/1/2026/03/uuid_report.pdf?signed");
+
+            // When
+            FileDownloadResponse response = fileService.generateDownloadUrl(fileId, userDetails);
+
+            // Then
+            assertThat(response.getFileId()).isEqualTo(fileId);
+            assertThat(response.getOriginalFilename()).isEqualTo("report.pdf");
+            assertThat(response.getContentType()).isEqualTo("application/pdf");
+            assertThat(response.getFileSize()).isEqualTo(2048L);
+            assertThat(response.getDownloadUrl()).contains("signed");
+            assertThat(response.getExpiresAt()).isNotNull();
+
+            verify(s3StorageService).generatePresignedDownloadUrl(
+                    eq("uploads/1/2026/03/uuid_report.pdf"), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("Given file not owned by user, when generating download URL, then throws ResourceNotFoundException")
+        void givenFileNotOwnedByUser_whenGeneratingDownloadUrl_thenThrowsResourceNotFoundException() {
+            // Given
+            UUID fileId = UUID.randomUUID();
+
+            when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
+            when(fileMetadataRepository.findByIdAndOwner(fileId, testUser))
+                    .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> fileService.generateDownloadUrl(fileId, userDetails))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining(fileId.toString());
+        }
+
+        @Test
+        @DisplayName("Given file with PENDING status, when generating download URL, then throws FileValidationException")
+        void givenFileWithPendingStatus_whenGeneratingDownloadUrl_thenThrowsFileValidationException() {
+            // Given
+            UUID fileId = UUID.randomUUID();
+            FileMetadata metadata = FileMetadata.builder()
+                    .id(fileId)
+                    .originalFilename("report.pdf")
+                    .storedFilename("uuid_report.pdf")
+                    .contentType("application/pdf")
+                    .fileSize(2048L)
+                    .s3Key("uploads/1/2026/03/uuid_report.pdf")
+                    .s3Bucket("test-bucket")
+                    .uploadStatus(UploadStatus.PENDING)
+                    .owner(testUser)
+                    .build();
+
+            when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
+            when(fileMetadataRepository.findByIdAndOwner(fileId, testUser))
+                    .thenReturn(Optional.of(metadata));
+
+            // When / Then
+            assertThatThrownBy(() -> fileService.generateDownloadUrl(fileId, userDetails))
+                    .isInstanceOf(FileValidationException.class)
+                    .hasMessageContaining("PENDING");
+        }
+
+        @Test
+        @DisplayName("Given file with FAILED status, when generating download URL, then throws FileValidationException")
+        void givenFileWithFailedStatus_whenGeneratingDownloadUrl_thenThrowsFileValidationException() {
+            // Given
+            UUID fileId = UUID.randomUUID();
+            FileMetadata metadata = FileMetadata.builder()
+                    .id(fileId)
+                    .originalFilename("report.pdf")
+                    .storedFilename("uuid_report.pdf")
+                    .contentType("application/pdf")
+                    .fileSize(2048L)
+                    .s3Key("uploads/1/2026/03/uuid_report.pdf")
+                    .s3Bucket("test-bucket")
+                    .uploadStatus(UploadStatus.FAILED)
+                    .owner(testUser)
+                    .build();
+
+            when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
+            when(fileMetadataRepository.findByIdAndOwner(fileId, testUser))
+                    .thenReturn(Optional.of(metadata));
+
+            // When / Then
+            assertThatThrownBy(() -> fileService.generateDownloadUrl(fileId, userDetails))
+                    .isInstanceOf(FileValidationException.class)
+                    .hasMessageContaining("FAILED");
+        }
+
+        @Test
+        @DisplayName("Given S3 presigner fails, when generating download URL, then throws StorageException")
+        void givenS3PresignerFails_whenGeneratingDownloadUrl_thenThrowsStorageException() {
+            // Given
+            UUID fileId = UUID.randomUUID();
+            FileMetadata metadata = FileMetadata.builder()
+                    .id(fileId)
+                    .originalFilename("report.pdf")
+                    .storedFilename("uuid_report.pdf")
+                    .contentType("application/pdf")
+                    .fileSize(2048L)
+                    .s3Key("uploads/1/2026/03/uuid_report.pdf")
+                    .s3Bucket("test-bucket")
+                    .uploadStatus(UploadStatus.CLEAN)
+                    .owner(testUser)
+                    .build();
+
+            when(userRepository.findByUsername("editor")).thenReturn(Optional.of(testUser));
+            when(fileMetadataRepository.findByIdAndOwner(fileId, testUser))
+                    .thenReturn(Optional.of(metadata));
+            when(s3StorageService.generatePresignedDownloadUrl(anyString(), any(Duration.class)))
+                    .thenThrow(new StorageException("Presigner failed"));
+
+            // When / Then
+            assertThatThrownBy(() -> fileService.generateDownloadUrl(fileId, userDetails))
+                    .isInstanceOf(StorageException.class);
         }
     }
 

@@ -15,6 +15,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.docvault.dto.FileDownloadResponse;
+import com.docvault.exception.ResourceNotFoundException;
+import java.time.Duration;
+import java.time.Instant;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -29,6 +33,7 @@ public class FileService {
 
     // 100 MB in bytes
     private static final long MAX_FILE_SIZE = 100 * 1024 * 1024;
+    private static final Duration PRESIGNED_URL_DURATION = Duration.ofMinutes(15);
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             // Documents
@@ -155,5 +160,39 @@ public class FileService {
         // Replace spaces, trim, and fallback if empty
         sanitized = sanitized.trim().replaceAll("\\s+", "_");
         return sanitized.isEmpty() ? "unnamed" : sanitized;
+    }
+
+@Transactional(readOnly = true)
+    public FileDownloadResponse generateDownloadUrl(UUID fileId, UserDetailsImpl userDetails) {
+        User requester = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+ 
+        FileMetadata metadata = fileMetadataRepository.findByIdAndOwner(fileId, requester)
+                .orElseThrow(() -> {
+                    logger.warn("File not found or access denied [fileId={}, user='{}']",
+                            fileId, requester.getUsername());
+                    return new ResourceNotFoundException(
+                            "File not found with id: " + fileId);
+                });
+ 
+        if (metadata.getUploadStatus() != UploadStatus.CLEAN) {
+            throw new FileValidationException(
+                    "File is not available for download (status: " + metadata.getUploadStatus() + ")");
+        }
+ 
+        String downloadUrl = s3StorageService.generatePresignedDownloadUrl(
+                metadata.getS3Key(), PRESIGNED_URL_DURATION);
+ 
+        logger.info("Generated download URL for file [id={}, user='{}']",
+                fileId, requester.getUsername());
+ 
+        return FileDownloadResponse.builder()
+                .fileId(metadata.getId())
+                .originalFilename(metadata.getOriginalFilename())
+                .contentType(metadata.getContentType())
+                .fileSize(metadata.getFileSize())
+                .downloadUrl(downloadUrl)
+                .expiresAt(Instant.now().plus(PRESIGNED_URL_DURATION))
+                .build();
     }
 }

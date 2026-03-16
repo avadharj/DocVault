@@ -1,37 +1,37 @@
 package com.docvault.controller;
 
-import com.docvault.config.SecurityConfig;
+import com.docvault.dto.FileDownloadResponse;
 import com.docvault.dto.FileUploadResponse;
 import com.docvault.exception.FileValidationException;
-import com.docvault.exception.GlobalExceptionHandler;
+import com.docvault.exception.ResourceNotFoundException;
 import com.docvault.exception.StorageException;
-import com.docvault.filter.JwtAuthenticationFilter;
-import com.docvault.security.JwtUtils;
 import com.docvault.security.UserDetailsImpl;
-import com.docvault.security.UserDetailsServiceImpl;
 import com.docvault.service.FileService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -58,6 +58,10 @@ class FileControllerTest {
             3L, "viewer", "viewer@example.com", "hashedpassword", true,
             List.of(new SimpleGrantedAuthority("ROLE_VIEWER"))
     );
+
+    // ========================
+    // UPLOAD TESTS
+    // ========================
 
     @Nested
     @DisplayName("POST /api/files/upload")
@@ -188,6 +192,88 @@ class FileControllerTest {
             mockMvc.perform(multipart("/api/files/upload")
                             .with(user(editorUser)))
                     .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ========================
+    // DOWNLOAD TESTS
+    // ========================
+
+    @Nested
+    @DisplayName("GET /api/files/{fileId}/download")
+    class DownloadFile {
+
+        @Test
+        @DisplayName("Given EDITOR with valid file, when downloading, then returns 200 with pre-signed URL")
+        void givenEditorWithValidFile_whenDownloading_thenReturns200WithPresignedUrl() throws Exception {
+            // Given
+            UUID fileId = UUID.randomUUID();
+            FileDownloadResponse downloadResponse = FileDownloadResponse.builder()
+                    .fileId(fileId)
+                    .originalFilename("report.pdf")
+                    .contentType("application/pdf")
+                    .fileSize(2048L)
+                    .downloadUrl("https://s3.amazonaws.com/bucket/key?signed")
+                    .expiresAt(Instant.now().plusSeconds(900))
+                    .build();
+
+            when(fileService.generateDownloadUrl(eq(fileId), any(UserDetailsImpl.class)))
+                    .thenReturn(downloadResponse);
+
+            // When / Then
+            mockMvc.perform(get("/api/files/" + fileId + "/download")
+                            .with(user(editorUser)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.fileId").value(fileId.toString()))
+                    .andExpect(jsonPath("$.originalFilename").value("report.pdf"))
+                    .andExpect(jsonPath("$.downloadUrl").value("https://s3.amazonaws.com/bucket/key?signed"))
+                    .andExpect(jsonPath("$.expiresAt").exists());
+        }
+
+        @Test
+        @DisplayName("Given VIEWER with valid file, when downloading, then returns 200")
+        void givenViewerWithValidFile_whenDownloading_thenReturns200() throws Exception {
+            // Given
+            UUID fileId = UUID.randomUUID();
+            FileDownloadResponse downloadResponse = FileDownloadResponse.builder()
+                    .fileId(fileId)
+                    .originalFilename("report.pdf")
+                    .contentType("application/pdf")
+                    .fileSize(2048L)
+                    .downloadUrl("https://s3.amazonaws.com/bucket/key?signed")
+                    .expiresAt(Instant.now().plusSeconds(900))
+                    .build();
+
+            when(fileService.generateDownloadUrl(eq(fileId), any(UserDetailsImpl.class)))
+                    .thenReturn(downloadResponse);
+
+            // When / Then
+            mockMvc.perform(get("/api/files/" + fileId + "/download")
+                            .with(user(viewerUser)))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("Given no authentication, when downloading, then returns 401")
+        void givenNoAuthentication_whenDownloading_thenReturns401() throws Exception {
+            UUID fileId = UUID.randomUUID();
+
+            mockMvc.perform(get("/api/files/" + fileId + "/download"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("Given file not found, when downloading, then returns 404")
+        void givenFileNotFound_whenDownloading_thenReturns404() throws Exception {
+            // Given
+            UUID fileId = UUID.randomUUID();
+            when(fileService.generateDownloadUrl(eq(fileId), any(UserDetailsImpl.class)))
+                    .thenThrow(new ResourceNotFoundException("File not found with id: " + fileId));
+
+            // When / Then
+            mockMvc.perform(get("/api/files/" + fileId + "/download")
+                            .with(user(editorUser)))
+                    .andExpect(status().isNotFound());
         }
     }
 }

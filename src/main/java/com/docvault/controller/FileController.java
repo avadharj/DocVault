@@ -11,6 +11,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.docvault.dto.FileDownloadResponse;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/files")
@@ -27,5 +29,15 @@ public class FileController {
 
         FileUploadResponse response = fileService.uploadFile(file, userDetails);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{fileId}/download")
+    @PreAuthorize("hasAnyRole('VIEWER', 'EDITOR', 'ADMIN')")
+    public ResponseEntity<FileDownloadResponse> downloadFile(
+            @PathVariable UUID fileId,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+ 
+        FileDownloadResponse response = fileService.generateDownloadUrl(fileId, userDetails);
+        return ResponseEntity.ok(response);
     }
 }

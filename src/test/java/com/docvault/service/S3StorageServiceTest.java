@@ -14,10 +14,15 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.net.URI;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,11 +35,14 @@ class S3StorageServiceTest {
     @Mock
     private S3Client s3Client;
 
+    @Mock
+    private S3Presigner s3Presigner;
+
     private S3StorageService s3StorageService;
 
     @BeforeEach
     void setUp() throws Exception {
-        s3StorageService = new S3StorageService(s3Client);
+        s3StorageService = new S3StorageService(s3Client, s3Presigner);
 
         // Inject the bucket name via reflection since @Value won't work in unit tests
         Field bucketNameField = S3StorageService.class.getDeclaredField("bucketName");
@@ -92,5 +100,44 @@ class S3StorageServiceTest {
     @DisplayName("Given bucket name configured, when getting bucket name, then returns correct value")
     void givenBucketNameConfigured_whenGettingBucketName_thenReturnsCorrectValue() {
         assertThat(s3StorageService.getBucketName()).isEqualTo("test-bucket");
+    }
+
+    @Nested
+    @DisplayName("Generate Presigned Download URL")
+    class GeneratePresignedDownloadUrl {
+
+        @Test
+        @DisplayName("Given valid S3 key, when generating presigned URL, then returns URL string")
+        void givenValidS3Key_whenGeneratingPresignedUrl_thenReturnsUrlString() throws Exception {
+            // Given
+            PresignedGetObjectRequest presigned = mock(PresignedGetObjectRequest.class);
+            when(presigned.url()).thenReturn(URI.create(
+                    "https://test-bucket.s3.amazonaws.com/uploads/1/2026/03/uuid_report.pdf?X-Amz-Signature=abc").toURL());
+            when(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class)))
+                    .thenReturn(presigned);
+
+            // When
+            String url = s3StorageService.generatePresignedDownloadUrl(
+                    "uploads/1/2026/03/uuid_report.pdf", Duration.ofMinutes(15));
+
+            // Then
+            assertThat(url).contains("test-bucket");
+            assertThat(url).contains("uuid_report.pdf");
+            verify(s3Presigner).presignGetObject(any(GetObjectPresignRequest.class));
+        }
+
+        @Test
+        @DisplayName("Given S3 presigner throws, when generating presigned URL, then wraps in StorageException")
+        void givenS3PresignerThrows_whenGeneratingPresignedUrl_thenWrapsInStorageException() {
+            // Given
+            when(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class)))
+                    .thenThrow(new RuntimeException("Presigner broken"));
+
+            // When / Then
+            assertThatThrownBy(() ->
+                    s3StorageService.generatePresignedDownloadUrl("key", Duration.ofMinutes(15)))
+                    .isInstanceOf(StorageException.class)
+                    .hasMessage("Failed to generate download URL");
+        }
     }
 }

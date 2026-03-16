@@ -8,6 +8,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import com.docvault.exception.FileValidationException;
 import com.docvault.exception.StorageException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -81,6 +82,12 @@ public class GlobalExceptionHandler {
             MaxUploadSizeExceededException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST,
                 "File size exceeds maximum allowed size", request);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(
+        MissingServletRequestPartException ex, HttpServletRequest request) {
+    return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 
     @ExceptionHandler(Exception.class)
